@@ -29,6 +29,7 @@ model = AnomalyDetector()
 preprocessor = TrafficPreprocessor()
 data_manager = DataManager()
 state_tracker = TrafficStateTracker(window_size=60)
+alerter = AlertManager()
 
 # Baseline stats for explainability (simple mean/std)
 baseline_stats = {}
