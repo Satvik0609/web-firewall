@@ -3,187 +3,145 @@ import requests
 import pandas as pd
 import time
 import plotly.express as px
-import random
 import plotly.graph_objects as go
+import numpy as np
+from datetime import datetime, timedelta
+import random
 
 # Configuration
 API_URL = "http://127.0.0.1:8000"
 
 st.set_page_config(
-    page_title="WAF ML Anomaly Detection",
+    page_title="WAF ML Dashboard",
     layout="wide",
     initial_sidebar_state="expanded",
-    page_icon="🛡️"
+    page_icon="🛡️",
+    menu_items={
+        'Get Help': 'https://github.com/your-repo',
+        'Report a bug': "https://github.com/your-repo/issues",
+        'About': "# WAF ML Anomaly Detection Dashboard"
+    }
 )
 
-# Login System
-if 'token' not in st.session_state:
-    st.title("🔐 WAF Dashboard Login")
-    with st.form("login_form"):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        submitted = st.form_submit_button("Login")
-        
-        if submitted:
-            try:
-                res = requests.post(f"{API_URL}/token", data={"username": username, "password": password})
-                if res.status_code == 200:
-                    token_data = res.json()
-                    st.session_state['token'] = token_data['access_token']
-                    st.session_state['username'] = username
-                    st.rerun()
-                else:
-                    st.error(f"Invalid credentials ({res.status_code}): {res.text}")
-            except Exception as e:
-                st.error(f"Connection failed: {e}")
-    st.stop()
-
-# Authenticated Session
-HEADERS = {"Authorization": f"Bearer {st.session_state['token']}"}
-
-# Logout
-st.sidebar.write(f"Logged in as: **{st.session_state['username']}**")
-if st.sidebar.button("Logout"):
-    del st.session_state['token']
-    st.rerun()
-
-# --- CSS for "Pro" Look ---
+# --- Custom CSS for Modern UI ---
 st.markdown("""
 <style>
+    .main {
+        background-color: #0E1117;
+        color: #FAFAFA;
+    }
+    
+    .css-1d391kg, [data-testid="stSidebarContent"] {
+        background-color: #1E1E2E !important;
+        border-right: 1px solid #2D3748;
+    }
+    
     .metric-card {
-        background-color: #1e1e1e;
-        border: 1px solid #333;
-        padding: 20px;
-        border-radius: 10px;
-        text-align: center;
+        background: linear-gradient(145deg, #1E1E2E, #2D2B42);
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+        transition: all 0.3s ease;
+        border: 1px solid #2D3748;
     }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+    
+    .stButton>button {
+        border-radius: 12px;
+        padding: 0.5rem 1.5rem;
+        font-weight: 600;
+        transition: all 0.3s;
+        background: linear-gradient(90deg, #4F46E5, #7C3AED);
+        border: none;
+    }
+    
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+    
     .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
+        gap: 8px;
     }
+    
     .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        white-space: pre-wrap;
-        background-color: #0e1117;
-        border-radius: 4px 4px 0px 0px;
-        gap: 1px;
-        padding-top: 10px;
-        padding-bottom: 10px;
+        padding: 8px 16px;
+        border-radius: 12px;
+        transition: all 0.3s;
     }
-    h1 {
-        text-align: center;
-        color: #4CAF50;
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #4F46E5;
+        color: white !important;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .fade-in {
+        animation: fadeIn 0.5s ease-out forwards;
+    }
+    
+    .login-container {
+        background: linear-gradient(145deg, #1E1E2E, #2D2B42);
+        border-radius: 20px;
+        padding: 3rem 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        max-width: 500px;
+        margin: 2rem auto;
+        border: 1px solid #2D3748;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🛡️ ML-Enabled WAF | Security Command Center")
-
-# Sidebar for controls
-st.sidebar.header("Control Panel")
-simulation_speed = st.sidebar.slider("Simulation Speed (requests/sec)", 1, 10, 2)
-run_simulation = st.sidebar.checkbox("Run Traffic Simulation")
-
-enable_shadow_mode = st.sidebar.checkbox("Enable Shadow Mode (Global)")
-rate_limit_threshold = st.sidebar.number_input("Rate Limit Threshold (req/min)", min_value=1, max_value=10000, value=100)
-if st.sidebar.button("Apply Security Controls"):
-    try:
-        requests.post(f"{API_URL}/config/shadow_mode", json={"enable": enable_shadow_mode}, headers=HEADERS)
-        requests.post(f"{API_URL}/config/rate_limit", json={"threshold": int(rate_limit_threshold)}, headers=HEADERS)
-        st.sidebar.success("Security controls applied")
-    except:
-        st.sidebar.error("Failed to apply controls")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Model Training")
-model_type = st.sidebar.selectbox("Model Type", ["isolation_forest", "autoencoder"])
-
-if st.sidebar.button("Retrain Model"):
-    try:
-        res = requests.post(f"{API_URL}/retrain", params={"model_type": model_type}, headers=HEADERS).json()
-        st.sidebar.success(res['status'])
-    except:
-        st.sidebar.error("Failed to retrain")
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Alert Configuration")
-webhook_url = st.sidebar.text_input("Webhook URL", placeholder="https://hooks.slack.com/...")
-if st.sidebar.button("Update Alert Config"):
-    try:
-        res = requests.post(f"{API_URL}/config/alerts", json={"webhook_url": webhook_url}, headers=HEADERS).json()
-        if res.get('enabled'):
-            st.sidebar.success("Alerts Enabled")
-        else:
-            st.sidebar.info("Alerts Disabled")
-    except:
-        st.sidebar.error("Failed to update config")
-        
-st.sidebar.markdown("---")
-st.sidebar.subheader("Blocklist")
-try:
-    bl = requests.get(f"{API_URL}/blocklist", headers=HEADERS).json().get("blocked_ips", [])
-    st.sidebar.write(f"Blocked IPs: {len(bl)}")
-    for ip in bl[:10]:
-        cols = st.sidebar.columns([2,1])
-        cols[0].write(ip)
-        if cols[1].button("Unblock", key=f"unblock-{ip}"):
-            try:
-                requests.post(f"{API_URL}/blocklist/remove", params={"ip": ip}, headers=HEADERS)
-                st.sidebar.success(f"Unblocked {ip}")
-            except:
-                st.sidebar.error("Failed")
-    new_ip = st.sidebar.text_input("Add IP to blocklist", "")
-    if st.sidebar.button("Block IP"):
-        try:
-            requests.post(f"{API_URL}/blocklist/add", params={"ip": new_ip}, headers=HEADERS)
-            st.sidebar.success(f"Blocked {new_ip}")
-        except:
-            st.sidebar.error("Failed to block")
-except:
-    st.sidebar.info("Blocklist unavailable")
-
-# --- TOP METRICS (Industry Standard Placement) ---
-st.markdown("### System Status")
-col1, col2, col3, col4 = st.columns(4)
-
-try:
-    stats = requests.get(f"{API_URL}/stats", headers=HEADERS).json()
-    col1.metric("Model Status", stats.get("model_status", "Unknown"), delta="Active", delta_color="normal")
-    col2.metric("Total Analyzed", stats.get("total_analyzed", 0))
-    col3.metric("Anomalies Detected", stats.get("anomalies_detected", 0), delta_color="inverse")
-    col4.metric("Active IPs", stats.get("active_ips", 0))
-except:
-    col1.metric("API Status", "Offline", delta="Down", delta_color="inverse")
-    st.error("Could not connect to API. Please ensure `uvicorn src.api.main:app` is running.")
-
-
-# --- MAIN TABS ---
-tab_monitor, tab_forensics, tab_test = st.tabs(["📊 Live Monitor", "🔍 Forensics & Feedback", "🛠️ Manual Test"])
-
-# --- TAB 1: LIVE MONITOR ---
-with tab_monitor:
-    st.subheader("Real-time Threat Intelligence")
-    
-    # Placeholders
-    col_map, col_pie = st.columns([2, 1])
-    with col_map:
-        map_placeholder = st.empty()
-    with col_pie:
-        pie_placeholder = st.empty()
-
-    st.markdown("### Recent Traffic Logs")
-    log_placeholder = st.empty()
-    st.markdown("### Anomaly Trend")
-    trend_placeholder = st.empty()
-
-# --- HELPER FUNCTIONS ---
+# Initialize session state
 if "traffic_history" not in st.session_state:
     st.session_state.traffic_history = []
 
+# --- LOGIN SYSTEM ---
+def show_login():
+    col = st.columns([1, 2, 1])[1]
+    with col:
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 2rem;">
+            <h1 style="color: #4F46E5; font-size: 2.5rem; margin-bottom: 0.5rem;">🛡️ WAF ML Dashboard</h1>
+            <p style="color: #A0AEC0; margin-bottom: 2rem;">Advanced Anomaly Detection System</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.form("login_form"):
+            username = st.text_input("👤 Username", placeholder="Enter your username")
+            password = st.text_input("🔑 Password", type="password", placeholder="Enter your password")
+            submitted = st.form_submit_button("Login", use_container_width=True)
+            
+            if submitted:
+                with st.spinner("Authenticating..."):
+                    try:
+                        res = requests.post(
+                            f"{API_URL}/token",
+                            data={"username": username, "password": password}
+                        )
+                        if res.status_code == 200:
+                            token_data = res.json()
+                            st.session_state['token'] = token_data['access_token']
+                            st.session_state['username'] = username
+                            st.rerun()
+                        else:
+                            st.error("Invalid credentials. Please try again.")
+                    except Exception as e:
+                        st.error(f"Connection error: {str(e)}")
+
+# --- HELPER FUNCTIONS ---
 def generate_random_traffic():
     """Generate a single random traffic log."""
     is_attack = random.random() < 0.1
-    # Random IP pool (Simulated Geo)
-    ips = [f"192.168.1.{i}" for i in range(1, 10)] + ["10.0.0.666"] # 666 is bot
+    ips = [f"192.168.1.{i}" for i in range(1, 10)] + ["10.0.0.666"]
     
     if is_attack:
         return {
@@ -194,8 +152,8 @@ def generate_random_traffic():
             "num_params": random.randint(5, 20),
             "method": random.choice(["POST", "PUT"]),
             "protocol": "HTTP/1.1",
-            "lat": random.uniform(-90, 90), # Sim Geo
-            "lon": random.uniform(-180, 180) # Sim Geo
+            "lat": random.uniform(-90, 90),
+            "lon": random.uniform(-180, 180)
         }
     else:
         return {
@@ -206,213 +164,367 @@ def generate_random_traffic():
             "num_params": random.randint(0, 5),
             "method": random.choice(["GET", "POST"]),
             "protocol": "HTTP/2",
-            "lat": random.uniform(20, 50), # Sim Geo (US/Europe)
+            "lat": random.uniform(20, 50),
             "lon": random.uniform(-100, 20)
         }
 
-def render_dashboard(df):
+def get_attack_reason(row):
+    """Extract attack reason from explanation."""
+    if not row.get('is_anomaly'): 
+        return "Normal"
+    exp = row.get('explanation', '')
+    if "Packet Size" in exp: 
+        return "DoS Attempt"
+    if "Latency" in exp: 
+        return "Slowloris"
+    if "URL" in exp: 
+        return "Injection"
+    if "Bot" in exp or "Rate" in exp: 
+        return "Botnet"
+    return "Unknown Anomaly"
+
+def render_dashboard(df, headers):
+    """Render dashboard charts and tables."""
     if df.empty:
-        map_placeholder.info("Waiting for traffic data... Start simulation in sidebar.")
+        st.info("Waiting for traffic data... Start simulation in sidebar.")
         return
 
-    # Chart 1: Threat Map (Scatter Geo)
-    # Simulating a "Threat Map" - usually requires real IP geolocation
-    fig_map = px.scatter_geo(
-        df,
-        lat="lat",
-        lon="lon",
-        color="is_anomaly",
-        hover_name="source_ip",
-        size="packet_size",
-        projection="natural earth",
-        title="Live Threat Map (Source IPs)",
-        color_discrete_map={True: "red", False: "#00CC96"},
-        template="plotly_dark"
-    )
-    fig_map.update_layout(margin={"r":0,"t":30,"l":0,"b":0})
-    map_placeholder.plotly_chart(fig_map, use_container_width=True)
+    col1, col2 = st.columns([2, 1])
     
-    # Chart 2: Attack Classification (Pie)
-    # Extract "Reason" from explanation for classification
-    def get_reason(row):
-        if not row['is_anomaly']: return "Normal"
-        exp = row['explanation']
-        if "Packet Size" in exp: return "DoS Attempt"
-        if "Latency" in exp: return "Slowloris"
-        if "URL" in exp: return "Injection"
-        if "Bot" in exp or "Rate" in exp: return "Botnet"
-        return "Unknown Anomaly"
-
-    df['attack_type'] = df.apply(get_reason, axis=1)
+    # Chart 1: Threat Map
+    with col1:
+        st.markdown("### 🗺️ Live Threat Map")
+        fig_map = px.scatter_geo(
+            df,
+            lat="lat",
+            lon="lon",
+            color="is_anomaly",
+            hover_name="source_ip",
+            size="packet_size",
+            projection="natural earth",
+            color_discrete_map={True: "#EF4444", False: "#10B981"},
+            template="plotly_dark"
+        )
+        fig_map.update_layout(
+            margin={"r":0,"t":30,"l":0,"b":0},
+            height=400,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)'
+        )
+        st.plotly_chart(fig_map, use_container_width=True)
     
-    attack_counts = df['attack_type'].value_counts().reset_index()
-    attack_counts.columns = ['type', 'count']
+    # Chart 2: Attack Classification
+    with col2:
+        st.markdown("### 📊 Traffic Classification")
+        df['attack_type'] = df.apply(get_attack_reason, axis=1)
+        attack_counts = df['attack_type'].value_counts().reset_index()
+        attack_counts.columns = ['type', 'count']
+        
+        fig_pie = px.pie(
+            attack_counts, 
+            values='count', 
+            names='type',
+            color_discrete_map={
+                'Normal': '#10B981', 
+                'DoS Attempt': '#EF4444', 
+                'Botnet': '#AB63FA',
+                'Injection': '#FFA15A',
+                'Slowloris': '#19D3F3'
+            },
+            hole=0.4
+        )
+        fig_pie.update_layout(
+            height=400,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#E2E8F0'),
+            margin=dict(l=20, r=20, t=30, b=20)
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
     
-    fig_pie = px.pie(
-        attack_counts, 
-        values='count', 
-        names='type', 
-        title="Traffic Classification",
-        color='type',
-        color_discrete_map={
-            'Normal': '#00CC96', 
-            'DoS Attempt': '#EF553B', 
-            'Botnet': '#AB63FA',
-            'Injection': '#FFA15A',
-            'Slowloris': '#19D3F3'
-        },
-        hole=0.4,
-        template="plotly_dark"
-    )
-    pie_placeholder.plotly_chart(fig_pie, use_container_width=True)
-    
-    # Trend: anomalies over time (session)
+    # Anomaly Trend
+    st.markdown("### 📈 Anomaly Trend")
     try:
         trend_df = df.copy()
         trend_df['count'] = trend_df['is_anomaly'].apply(lambda x: 1 if x else 0)
         trend_df['t'] = trend_df['timestamp']
-        fig_trend = px.line(trend_df, x='t', y='count', title="Anomaly Trend", template="plotly_dark")
-        trend_placeholder.plotly_chart(fig_trend, use_container_width=True)
+        
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Scatter(
+            x=trend_df['t'],
+            y=trend_df['count'],
+            fill='tozeroy',
+            line=dict(color='#EF4444', width=3),
+            fillcolor='rgba(239, 68, 68, 0.1)',
+            name='Anomalies'
+        ))
+        fig_trend.update_layout(
+            height=300,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#E2E8F0'),
+            xaxis=dict(gridcolor='#2D3748'),
+            yaxis=dict(gridcolor='#2D3748'),
+            margin=dict(l=20, r=20, t=30, b=20)
+        )
+        st.plotly_chart(fig_trend, use_container_width=True)
     except:
         pass
     
-    # Update Log Table (Show last 10)
+    # Recent Logs Table
+    st.markdown("### 📋 Recent Traffic Logs")
     cols = ['timestamp', 'source_ip', 'method', 'attack_type', 'recommendation']
-    # Filter cols that exist
     cols = [c for c in cols if c in df.columns]
     
-    log_placeholder.dataframe(
+    st.dataframe(
         df.tail(10)[cols].sort_index(ascending=False),
-        use_container_width=True
+        use_container_width=True,
+        height=300
     )
 
-if run_simulation:
-    while True:
-        traffic_data = generate_random_traffic()
+def main_dashboard():
+    """Main dashboard after login."""
+    
+    # Sidebar
+    with st.sidebar:
+        st.markdown("""
+        <div style="text-align: center; margin-bottom: 2rem;">
+            <h2 style="color: #4F46E5;">WAF ML Dashboard</h2>
+            <p style="color: #A0AEC0; font-size: 0.9rem;">v1.0.0</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        try:
-            response = requests.post(f"{API_URL}/analyze", json=traffic_data, headers=HEADERS)
-            if response.status_code == 200:
-                result = response.json()
-                traffic_data['is_anomaly'] = result['is_anomaly']
-                traffic_data['score'] = result['anomaly_score']
-                traffic_data['recommendation'] = result['recommendation']
-                traffic_data['explanation'] = result['explanation']
-                traffic_data['timestamp'] = time.strftime("%H:%M:%S")
-                
-                # Add to history
-                st.session_state.traffic_history.append(traffic_data)
-                if len(st.session_state.traffic_history) > 100:
-                    st.session_state.traffic_history.pop(0)
-                
-                # Update Chart
-                df = pd.DataFrame(st.session_state.traffic_history)
-                render_dashboard(df)
-                
-            else:
-                st.error(f"API Error: {response.status_code}")
-        except Exception as e:
-            st.error(f"Connection Error: {e}")
-            break
-            
-        time.sleep(1/simulation_speed)
-else:
-    if st.session_state.traffic_history:
-        df = pd.DataFrame(st.session_state.traffic_history)
-        render_dashboard(df)
-    else:
-        render_dashboard(pd.DataFrame())
+        st.markdown("---")
         
-# Export data
-st.markdown("---")
-st.markdown("#### Data Export")
-col_e1, col_e2 = st.columns(2)
-with col_e1:
-    if st.button("Download Logs (CSV)"):
-        try:
-            res = requests.get(f"{API_URL}/export/logs", params={"format": "csv", "limit": 1000}, headers=HEADERS)
-            if res.status_code == 200:
-                st.download_button("Save CSV", data=res.text, file_name="traffic_logs.csv")
-        except:
-            st.error("CSV export failed")
-with col_e2:
-    if st.button("Download Logs (JSON)"):
-        try:
-            res = requests.get(f"{API_URL}/export/logs", params={"format": "json", "limit": 1000}, headers=HEADERS)
-            if res.status_code == 200:
-                st.download_button("Save JSON", data=str(res.json()), file_name="traffic_logs.json")
-        except:
-            st.error("JSON export failed")
-
-# --- TAB 2: FORENSICS ---
-with tab_forensics:
-    st.subheader("Anomaly Feedback Loop")
-    st.write("Review detected anomalies and provide feedback to improve the model.")
-
-    if st.session_state.traffic_history:
-        df_hist = pd.DataFrame(st.session_state.traffic_history)
-        anomalies = df_hist[df_hist['is_anomaly'] == True]
+        # User info
+        st.markdown(f"""
+        <div style="margin-bottom: 1.5rem; padding: 1rem; background: rgba(79, 70, 229, 0.1); border-radius: 12px;">
+            <p style="margin: 0; font-size: 0.9rem; color: #A0AEC0;">Logged in as</p>
+            <p style="margin: 0; font-weight: 600; color: #4F46E5;">{st.session_state.get('username', '')}</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if not anomalies.empty:
-            # Select an anomaly to review
-            selected_idx = st.selectbox("Select Anomaly to Review", anomalies.index.tolist(), format_func=lambda x: f"Log #{x} - {anomalies.loc[x]['explanation']}")
-            
-            row = anomalies.loc[selected_idx]
-            st.json(row.to_dict())
-            
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                if st.button("Confirm Anomaly"):
-                    # Send feedback
-                    # Use current time as mock timestamp since we store formatted string
-                    payload = {"timestamp": time.time(), "feedback": "anomaly"}
-                    requests.post(f"{API_URL}/feedback", json=payload, headers=HEADERS)
-                    st.success("Feedback recorded: Confirmed Anomaly")
-                    
-            with col_f2:
-                if st.button("Mark as False Positive"):
-                    payload = {"timestamp": time.time(), "feedback": "normal"}
-                    requests.post(f"{API_URL}/feedback", json=payload, headers=HEADERS)
-                    st.info("Feedback recorded: False Positive")
-        else:
-            st.info("No anomalies detected in current session history.")
-    else:
-        st.info("No data available.")
-
-# --- TAB 3: MANUAL TEST ---
-with tab_test:
-    st.subheader("Manual Inspection")
-    with st.form("manual_test"):
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            src_ip = st.text_input("Source IP", "192.168.1.5")
-            p_size = st.number_input("Packet Size", 0, 10000, 500)
-            lat = st.number_input("Latency (ms)", 0.0, 1000.0, 50.0)
-        with col_m2:
-            url_len = st.number_input("URL Length", 1, 1000, 30)
-            method = st.selectbox("Method", ["GET", "POST", "PUT", "DELETE"])
-            shadow_mode_manual = st.checkbox("Shadow Mode", value=False)
+        st.markdown("---")
+        st.subheader("⚙️ Control Panel")
         
-        submitted = st.form_submit_button("Analyze Request")
+        # Simulation Controls
+        st.markdown("**Traffic Simulation**")
+        simulation_speed = st.slider("Speed (req/sec)", 1, 10, 2)
+        run_simulation = st.checkbox("Run Simulation", value=False)
         
-        if submitted:
-            data = {
-                "source_ip": src_ip,
-                "packet_size": p_size,
-                "latency": lat,
-                "url_length": url_len,
-                "num_params": 0,
-                "method": method,
-                "protocol": "HTTP/1.1",
-                "shadow_mode": shadow_mode_manual
-            }
+        st.markdown("---")
+        
+        # Security Controls
+        st.markdown("**Security Controls**")
+        enable_shadow_mode = st.checkbox("Enable Shadow Mode")
+        rate_limit_threshold = st.number_input("Rate Limit (req/min)", min_value=1, max_value=10000, value=100)
+        
+        if st.button("Apply Controls", use_container_width=True):
+            headers = {"Authorization": f"Bearer {st.session_state['token']}"}
             try:
-                res = requests.post(f"{API_URL}/analyze", json=data, headers=HEADERS).json()
-                if res['is_anomaly']:
-                    st.error(f"❌ Anomaly Detected!")
-                    st.markdown(f"**Explanation:** `{res['explanation']}`")
-                    st.markdown(f"**Recommendation:** `{res['recommendation']}`")
-                else:
-                    st.success(f"✅ Traffic Normal")
+                requests.post(f"{API_URL}/config/shadow_mode", json={"enable": enable_shadow_mode}, headers=headers)
+                requests.post(f"{API_URL}/config/rate_limit", json={"threshold": int(rate_limit_threshold)}, headers=headers)
+                st.success("Controls applied")
             except:
-                st.error("API Error")
+                st.error("Failed to apply")
+        
+        st.markdown("---")
+        
+        # Model Training
+        st.markdown("**Model Training**")
+        model_type = st.selectbox("Model Type", ["isolation_forest", "autoencoder"])
+        
+        if st.button("Retrain Model", use_container_width=True):
+            headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+            try:
+                res = requests.post(f"{API_URL}/retrain", params={"model_type": model_type}, headers=headers).json()
+                st.success(res.get('status', 'Retraining started'))
+            except:
+                st.error("Failed to retrain")
+        
+        st.markdown("---")
+        
+        # Alerts Configuration
+        st.markdown("**Alert Configuration**")
+        webhook_url = st.text_input("Webhook URL", placeholder="https://hooks.slack.com/...")
+        
+        if st.button("Update Alerts", use_container_width=True):
+            headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+            try:
+                res = requests.post(f"{API_URL}/config/alerts", json={"webhook_url": webhook_url}, headers=headers).json()
+                st.success("Alerts configured")
+            except:
+                st.error("Failed to update")
+        
+        st.markdown("---")
+        
+        # Logout
+        if st.button("🚪 Logout", use_container_width=True):
+            del st.session_state['token']
+            st.rerun()
+    
+    # Main Content
+    headers = {"Authorization": f"Bearer {st.session_state['token']}"}
+    
+    st.title("🛡️ ML-Enabled WAF | Security Command Center")
+    
+    # Top Metrics
+    st.markdown("### System Status")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    try:
+        stats = requests.get(f"{API_URL}/stats", headers=headers).json()
+        col1.metric("Model Status", stats.get("model_status", "Unknown"), delta="Active", delta_color="normal")
+        col2.metric("Total Analyzed", stats.get("total_analyzed", 0))
+        col3.metric("Anomalies Detected", stats.get("anomalies_detected", 0), delta_color="inverse")
+        col4.metric("Active IPs", stats.get("active_ips", 0))
+    except:
+        col1.metric("API Status", "Offline", delta="Down", delta_color="inverse")
+        st.error("Could not connect to API. Ensure `uvicorn src.api.main:app` is running.")
+    
+    st.markdown("---")
+    
+    # Tabs
+    tab_monitor, tab_forensics, tab_test = st.tabs(["📊 Live Monitor", "🔍 Forensics", "🛠️ Manual Test"])
+    
+    # TAB 1: LIVE MONITOR
+    with tab_monitor:
+        st.subheader("Real-time Threat Intelligence")
+        
+        if run_simulation:
+            while True:
+                traffic_data = generate_random_traffic()
+                
+                try:
+                    response = requests.post(f"{API_URL}/analyze", json=traffic_data, headers=headers)
+                    if response.status_code == 200:
+                        result = response.json()
+                        traffic_data['is_anomaly'] = result['is_anomaly']
+                        traffic_data['score'] = result['anomaly_score']
+                        traffic_data['recommendation'] = result['recommendation']
+                        traffic_data['explanation'] = result['explanation']
+                        traffic_data['timestamp'] = time.strftime("%H:%M:%S")
+                        
+                        st.session_state.traffic_history.append(traffic_data)
+                        if len(st.session_state.traffic_history) > 100:
+                            st.session_state.traffic_history.pop(0)
+                        
+                        df = pd.DataFrame(st.session_state.traffic_history)
+                        render_dashboard(df, headers)
+                    else:
+                        st.error(f"API Error: {response.status_code}")
+                except Exception as e:
+                    st.error(f"Connection Error: {e}")
+                    break
+                
+                time.sleep(1/simulation_speed)
+        else:
+            if st.session_state.traffic_history:
+                df = pd.DataFrame(st.session_state.traffic_history)
+                render_dashboard(df, headers)
+            else:
+                render_dashboard(pd.DataFrame(), headers)
+        
+        # Data Export
+        st.markdown("---")
+        st.markdown("#### 📥 Data Export")
+        col_e1, col_e2 = st.columns(2)
+        
+        with col_e1:
+            if st.button("Download Logs (CSV)", use_container_width=True):
+                try:
+                    res = requests.get(f"{API_URL}/export/logs", params={"format": "csv", "limit": 1000}, headers=headers)
+                    if res.status_code == 200:
+                        st.download_button("Save CSV", data=res.text, file_name="traffic_logs.csv", use_container_width=True)
+                except:
+                    st.error("CSV export failed")
+        
+        with col_e2:
+            if st.button("Download Logs (JSON)", use_container_width=True):
+                try:
+                    res = requests.get(f"{API_URL}/export/logs", params={"format": "json", "limit": 1000}, headers=headers)
+                    if res.status_code == 200:
+                        st.download_button("Save JSON", data=str(res.json()), file_name="traffic_logs.json", use_container_width=True)
+                except:
+                    st.error("JSON export failed")
+    
+    # TAB 2: FORENSICS
+    with tab_forensics:
+        st.subheader("Anomaly Feedback Loop")
+        st.write("Review detected anomalies and provide feedback to improve the model.")
+        
+        if st.session_state.traffic_history:
+            df_hist = pd.DataFrame(st.session_state.traffic_history)
+            anomalies = df_hist[df_hist.get('is_anomaly', False) == True]
+            
+            if not anomalies.empty:
+                selected_idx = st.selectbox("Select Anomaly to Review", anomalies.index.tolist(), 
+                                           format_func=lambda x: f"Log #{x} - {anomalies.loc[x].get('explanation', 'N/A')}")
+                
+                row = anomalies.loc[selected_idx]
+                st.json(row.to_dict())
+                
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
+                    if st.button("Confirm Anomaly", use_container_width=True):
+                        payload = {"timestamp": time.time(), "feedback": "anomaly"}
+                        requests.post(f"{API_URL}/feedback", json=payload, headers=headers)
+                        st.success("Feedback recorded: Confirmed Anomaly")
+                
+                with col_f2:
+                    if st.button("Mark as False Positive", use_container_width=True):
+                        payload = {"timestamp": time.time(), "feedback": "normal"}
+                        requests.post(f"{API_URL}/feedback", json=payload, headers=headers)
+                        st.info("Feedback recorded: False Positive")
+            else:
+                st.info("No anomalies detected in current session history.")
+        else:
+            st.info("No data available.")
+    
+    # TAB 3: MANUAL TEST
+    with tab_test:
+        st.subheader("Manual Inspection")
+        with st.form("manual_test"):
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
+                src_ip = st.text_input("Source IP", "192.168.1.5")
+                p_size = st.number_input("Packet Size", 0, 10000, 500)
+                lat = st.number_input("Latency (ms)", 0.0, 1000.0, 50.0)
+            with col_m2:
+                url_len = st.number_input("URL Length", 1, 1000, 30)
+                method = st.selectbox("Method", ["GET", "POST", "PUT", "DELETE"])
+                shadow_mode_manual = st.checkbox("Shadow Mode", value=False)
+            
+            submitted = st.form_submit_button("Analyze Request", use_container_width=True)
+            
+            if submitted:
+                data = {
+                    "source_ip": src_ip,
+                    "packet_size": p_size,
+                    "latency": lat,
+                    "url_length": url_len,
+                    "num_params": 0,
+                    "method": method,
+                    "protocol": "HTTP/1.1",
+                    "shadow_mode": shadow_mode_manual
+                }
+                try:
+                    res = requests.post(f"{API_URL}/analyze", json=data, headers=headers).json()
+                    if res['is_anomaly']:
+                        st.error(f"❌ Anomaly Detected!")
+                        st.markdown(f"**Explanation:** `{res['explanation']}`")
+                        st.markdown(f"**Recommendation:** `{res['recommendation']}`")
+                    else:
+                        st.success(f"✅ Traffic Normal")
+                except:
+                    st.error("API Error")
+
+# Main App Entry Point
+def main():
+    if 'token' not in st.session_state:
+        show_login()
+    else:
+        main_dashboard()
+
+if __name__ == "__main__":
+    main()
