@@ -8,3 +8,8 @@ joblib
 requests
 plotly
 sqlalchemy
+python-jose[cryptography]
+passlib[argon2]
+python-multipart
+prometheus-client
+apscheduler

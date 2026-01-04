@@ -12,10 +12,15 @@ class AlertManager:
         self.enabled = False
         if webhook_url:
             self.enabled = True
+        self._last_sent = {}
+        self.cooldown_seconds = 60
 
     def set_webhook(self, url):
         self.webhook_url = url
         self.enabled = bool(url)
+    
+    def set_cooldown(self, seconds):
+        self.cooldown_seconds = max(0, int(seconds))
 
     def send_alert(self, log_data, result):
         """
@@ -24,11 +29,23 @@ class AlertManager:
         """
         if not self.enabled:
             return
+        
+        # Cooldown dedupe per IP
+        ip = log_data.get('source_ip')
+        now = datetime.now().timestamp()
+        last = self._last_sent.get(ip, 0)
+        if now - last < self.cooldown_seconds:
+            return
+        self._last_sent[ip] = now
 
         # Simple severity logic
-        severity = "MEDIUM"
-        if result['anomaly_score'] < -0.8: # IsolationForest scores are negative, lower is more anomalous
+        severity = "LOW"
+        recommendation = result.get('recommendation', '') or ''
+        score = result.get('anomaly_score', 0)
+        if "Block" in recommendation or score < -0.8:
             severity = "HIGH"
+        elif "Rate Limit" in recommendation or score < -0.5:
+            severity = "MEDIUM"
         
         # For Autoencoder (positive scores usually), we'll need to adjust, but let's assume generic logic for now
         # or pass severity from outside.

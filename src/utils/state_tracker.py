@@ -10,6 +10,16 @@ class TrafficStateTracker:
         self.window_size = window_size
         self.ip_history = defaultdict(list)
         self.blocked_ips = set()
+    
+    def block_ip(self, source_ip):
+        self.blocked_ips.add(source_ip)
+    
+    def unblock_ip(self, source_ip):
+        if source_ip in self.blocked_ips:
+            self.blocked_ips.remove(source_ip)
+    
+    def is_blocked(self, source_ip):
+        return source_ip in self.blocked_ips
 
     def update_and_get_features(self, source_ip, current_time=None):
         """
@@ -39,3 +49,6 @@ class TrafficStateTracker:
 
     def get_active_ips(self):
         return list(self.ip_history.keys())
+    
+    def get_blocked_ips(self):
+        return list(self.blocked_ips)

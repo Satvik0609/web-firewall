@@ -1,63 +1,79 @@
 # ML-Enabled Network Anomaly Detection Module
 
 ## Overview
-This project is a Machine Learning Enabled Network Anomaly Detection Module designed for integration with Web Application Firewalls (WAF). It aims to detect anomalies, discover new attacks, and autonomously recommend security policies by combining traditional rule-based filtering with intelligent ML-driven analysis.
+This project is a Machine Learning Enabled Network Anomaly Detection Module designed for integration with Web Application Firewalls (WAF). It acts as an intelligent layer that inspects traffic, detects zero-day attacks and bots using unsupervised learning, and allows for safe testing via Shadow Mode.
 
 ## Key Features
-1.  **ML-Module**: Inspects HTTP(S) traffic, performs network baselining, behavioral analysis, and anomaly detection.
-2.  **Adaptive Anomaly Detection**: Supports supervised and unsupervised learning to identify malicious behavior.
-3.  **Stateful Bot Detection**: Tracks IP request rates to identify high-frequency bot attacks.
-4.  **Automated Security Rule Recommendation**: Converts ML insights into human-readable security rules.
-5.  **Dashboard**: A user-friendly GUI for administrators to view reports, approve recommendations, and manage feedback.
-6.  **Continuous Learning**: Feedback loop to refine model accuracy over time.
+1.  **Dual ML Engines**:
+    *   **Isolation Forest**: Efficient anomaly detection for general outliers.
+    *   **Autoencoder**: Deep learning model for detecting complex non-linear attack patterns.
+2.  **Shadow Mode**: Safely test the system in production. It flags what *would* have been blocked without actually blocking traffic.
+3.  **Real-Time Alerting**: Integrated webhook support (Slack/Discord) for high-severity anomaly notifications.
+4.  **Stateful Bot Detection**: Tracks IP request rates in real-time to identify high-frequency bot attacks.
+5.  **Database Agnostic**: Built with SQLAlchemy. Uses **SQLite** by default (zero setup) but is ready for **PostgreSQL** in production.
+6.  **Interactive Dashboard**: Streamlit GUI for monitoring, simulation, retraining, and configuration.
 
-## Architecture
--   **ML Engine**: `src/ml_engine` - Isolation Forest model with stateful feature engineering.
--   **API Service**: `src/api` - FastAPI application for WAF integration.
--   **Dashboard**: `src/dashboard` - Streamlit application.
--   **State Tracker**: `src/utils/state_tracker.py` - In-memory request rate tracking.
+## external APIs & Cost
+*   **Is it free?** **YES**. This project uses 100% open-source libraries (`scikit-learn`, `fastapi`, `streamlit`, `sqlite`). It runs entirely on your local machine or server. You do not need to pay for any API tokens or cloud services.
+*   **External APIs Used**: None for the core logic.
+    *   *Optional*: You can configure an external **Webhook URL** (e.g., Slack Incoming Webhook) for alerts, but this is not required for the system to function.
 
 ## Setup & Running
 
-### Option 1: Local Python Environment
-1.  Install dependencies:
+### Prerequisites
+*   Python 3.9+
+*   pip
+
+### Option 1: Quick Start (Local)
+1.  **Install dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
-2.  Run the API (Terminal 1):
+2.  **Start the API Server** (Terminal 1):
     ```bash
     uvicorn src.api.main:app --reload
     ```
-3.  Run the Dashboard (Terminal 2):
+    *   The API will run at `http://127.0.0.1:8000`
+3.  **Start the Dashboard** (Terminal 2):
     ```bash
     streamlit run src/dashboard/app.py
     ```
+    *   The Dashboard will open in your browser at `http://localhost:8501`
 
 ### Option 2: Docker
-1.  Build the image:
+1.  **Build the image**:
     ```bash
     docker build -t waf-ml-module .
     ```
-2.  Run the container:
+2.  **Run the container**:
     ```bash
     docker run -p 8000:8000 -p 8501:8501 waf-ml-module
     ```
-    -   API: `http://localhost:8000`
-    -   Dashboard: `http://localhost:8501`
 
 ## Usage Guide
-1.  **Dashboard**: Open the dashboard to view real-time traffic simulation.
-2.  **Simulation**: Enable "Run Traffic Simulation" to see normal vs. anomalous traffic (including Bots).
-3.  **Feedback**: Use the "Anomaly Feedback Loop" section to confirm or reject anomalies, then click "Retrain Model" to update the system.
-4.  **API Integration**: Send POST requests to `/analyze` with traffic metadata.
 
-## Security
+### 1. Dashboard Control Panel
+*   **Traffic Simulation**: Toggle "Run Traffic Simulation" in the sidebar to see the system analyze generated traffic.
+*   **Shadow Mode**: Enable "Shadow Mode" to see recommendations without "blocking" actions.
+*   **Model Selection**: Choose between `isolation_forest` (fast) or `autoencoder` (deep) and click "Retrain Model".
+*   **Alerts**: Paste a Slack/Discord Webhook URL to receive notifications.
+
+### 2. API Integration
 The API is protected by an API Key.
--   **Default Key**: `naval-academy-secret-key-2024`
--   **Header**: `X-API-Key: naval-academy-secret-key-2024`
+*   **Header**: `X-API-Key: naval-academy-secret-key-2024`
+*   **Endpoints**:
+    *   `POST /analyze`: Analyze a single request log.
+    *   `POST /retrain`: Trigger model retraining.
+    *   `POST /feedback`: Submit feedback (False Positive/Confirmed Anomaly).
+
+## Architecture
+-   **ML Engine**: `src/ml_engine` - Scikit-learn & Neural Network models.
+-   **API**: `src/api` - FastAPI with Pydantic validation.
+-   **Data Layer**: `src/database.py` & `src/models.py` - SQLAlchemy ORM.
+-   **Utils**: `src/utils/alerter.py` (Async alerts), `state_tracker.py` (Bot detection).
 
 ## Testing
-Run integration tests:
+Run the full integration test suite:
 ```bash
-python tests/test_integration.py
+pytest tests/test_integration.py
 ```
